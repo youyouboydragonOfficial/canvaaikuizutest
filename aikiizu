@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI知識バトル</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&display=swap');
+        
+        body {
+            font-family: 'Noto Sans JP', sans-serif;
+            background: linear-gradient(135deg, #0f172a, #1e293b);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        
+        .game-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
+            transition: transform 0.3s ease;
+        }
+        
+        .option-btn {
+            transition: all 0.2s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .option-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+        
+        .option-btn.correct {
+            background-color: #10b981;
+            color: white;
+            animation: pulse 0.5s;
+        }
+        
+        .option-btn.incorrect {
+            background-color: #ef4444;
+            color: white;
+            animation: shake 0.5s;
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-5px); }
+            40%, 80% { transform: translateX(5px); }
+        }
+        
+        .timer-bar {
+            height: 8px;
+            background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+            border-radius: 4px;
+            transition: width 0.1s linear;
+        }
+        
+        .confetti {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background-color: #f59e0b;
+            border-radius: 50%;
+            animation: fall 3s ease-in infinite;
+        }
+        
+        @keyframes fall {
+            0% {
+                transform: translateY(-100px) rotate(0deg);
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(100vh) rotate(360deg);
+                opacity: 0;
+            }
+        }
+        
+        .points-popup {
+            position: absolute;
+            color: #10b981;
+            font-weight: bold;
+            font-size: 1.5rem;
+            animation: float-up 1.5s forwards;
+            pointer-events: none;
+        }
+        
+        @keyframes float-up {
+            0% {
+                opacity: 0;
+                transform: translateY(0);
+            }
+            20% {
+                opacity: 1;
+            }
+            80% {
+                opacity: 1;
+            }
+            100% {
+                opacity: 0;
+                transform: translateY(-50px);
+            }
+        }
+        
+        .combo-text {
+            text-shadow: 0 0 10px rgba(139, 92, 246, 0.7);
+            animation: pulse 0.5s infinite alternate;
+        }
+        
+        .star {
+            position: absolute;
+            font-size: 24px;
+            animation: twinkle 1.5s infinite alternate;
+        }
+        
+        @keyframes twinkle {
+            0% { opacity: 0.3; transform: scale(0.8); }
+            100% { opacity: 1; transform: scale(1.1); }
+        }
+        
+        .character {
+            transition: all 0.3s ease;
+        }
+        
+        .character:hover {
+            transform: translateY(-5px);
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+    <div id="confetti-container" class="fixed inset-0 pointer-events-none z-50"></div>
+    <div id="points-container" class="fixed inset-0 pointer-events-none z-40"></div>
+    
+    <!-- ゲームスタート画面 -->
+    <div id="start-screen" class="max-w-3xl mx-auto">
+        <div class="game-card rounded-3xl p-8 text-center">
+            <h1 class="text-5xl font-black text-indigo-600 mb-6">AI知識バトル</h1>
+            <div class="flex justify-center mb-8">
+                <div class="character text-8xl">🤖</div>
+            </div>
+            <p class="text-xl text-gray-700 mb-8">AIの知識を競うエキサイティングなクイズゲーム！<br>制限時間内に答えて、高得点を目指そう！</p>
+            <div class="bg-indigo-100 rounded-xl p-4 mb-8">
+                <h3 class="font-bold text-indigo-800 mb-2">ゲームルール</h3>
+                <ul class="text-left text-indigo-700 space-y-2">
+                    <li>✓ 正解で100ポイント獲得</li>
+                    <li>✓ 素早く答えるとタイムボーナス最大50ポイント</li>
+                    <li>✓ 連続正解でコンボボーナス！</li>
+                    <li>✓ 全5問、最高スコアを目指そう！</li>
+                </ul>
+            </div>
+            <button id="start-btn" class="bg-indigo-600 text-white text-xl px-10 py-4 rounded-xl hover:bg-indigo-700 transition-colors font-bold shadow-lg hover:shadow-xl transform hover:-translate-y-1">
+                ゲームスタート
+            </button>
+        </div>
+    </div>
+    
+    <!-- ゲーム画面 -->
+    <div id="game-screen" class="max-w-3xl mx-auto hidden">
+        <div class="game-card rounded-3xl p-6 md:p-8">
+            <div class="flex justify-between items-center mb-4">
+                <div class="bg-indigo-100 rounded-lg px-4 py-2">
+                    <span id="question-number" class="font-bold text-indigo-800">問題 1/5</span>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <span class="text-yellow-500 text-2xl">⭐</span>
+                    <span id="score-display" class="font-bold text-xl">0</span>
+                </div>
+            </div>
+            
+            <div class="mb-4">
+                <div class="flex justify-between text-sm text-gray-600 mb-1">
+                    <span>残り時間</span>
+                    <span id="time-display">15秒</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-2">
+                    <div id="timer-bar" class="timer-bar w-full"></div>
+                </div>
+            </div>
+            
+            <div id="combo-display" class="hidden text-center mb-4">
+                <span class="combo-text inline-block bg-gradient-to-r from-purple-600 to-indigo-600 text-transparent bg-clip-text font-black text-xl">
+                    <span id="combo-count">2</span>連続正解！ コンボ x<span id="combo-multiplier">1.5</span>
+                </span>
+            </div>
+            
+            <div id="question-container" class="mb-6">
+                <h2 id="question-text" class="text-2xl font-bold text-gray-800 mb-6 leading-tight">AIという言葉の正式名称は何ですか？</h2>
+                
+                <div id="options-container" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- 選択肢はJSで動的に生成 -->
+                </div>
+            </div>
+            
+            <div id="feedback-container" class="hidden bg-indigo-100 border-l-4 border-indigo-500 p-4 rounded-lg mb-6">
+                <p id="feedback-text" class="text-indigo-800"></p>
+            </div>
+            
+            <div class="flex justify-center">
+                <button id="next-btn" class="hidden bg-indigo-600 text-white px-8 py-3 rounded-xl hover:bg-indigo-700 transition-colors font-bold">次の問題へ</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 結果画面 -->
+    <div id="results-screen" class="max-w-3xl mx-auto hidden">
+        <div class="game-card rounded-3xl p-8 text-center">
+            <h2 class="text-4xl font-black text-indigo-600 mb-6">ゲーム結果</h2>
+            
+            <div class="mb-8">
+                <div class="inline-flex items-center justify-center w-40 h-40 rounded-full bg-indigo-100 mb-4 relative">
+                    <div id="stars-container" class="absolute inset-0"></div>
+                    <span id="final-score" class="text-5xl font-black text-indigo-600">0</span>
+                </div>
+                <h3 id="rank-title" class="text-2xl font-bold text-gray-800 mb-2">ランク: AI初心者</h3>
+                <p id="result-message" class="text-xl text-gray-700">AIの世界はまだまだ奥深いです。もう一度挑戦してみましょう！</p>
+            </div>
+            
+            <div class="bg-indigo-50 rounded-xl p-6 mb-8">
+                <h3 class="font-bold text-xl text-indigo-800 mb-4">スコア詳細</h3>
+                <div class="grid grid-cols-2 gap-4 text-left">
+                    <div>
+                        <p class="text-gray-600">正解数</p>
+                        <p id="correct-answers" class="font-bold text-xl">0/5</p>
+                    </div>
+                    <div>
+                        <p class="text-gray-600">基本ポイント</p>
+                        <p id="base-points" class="font-bold text-xl">0</p>
+                    </div>
+                    <div>
+                        <p class="text-gray-600">タイムボーナス</p>
+                        <p id="time-bonus" class="font-bold text-xl">0</p>
+                    </div>
+                    <div>
+                        <p class="text-gray-600">コンボボーナス</p>
+                        <p id="combo-bonus" class="font-bold text-xl">0</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="flex flex-col md:flex-row justify-center space-y-4 md:space-y-0 md:space-x-4">
+                <button id="restart-btn" class="bg-indigo-600 text-white px-8 py-3 rounded-xl hover:bg-indigo-700 transition-colors font-bold">もう一度挑戦する</button>
+                <button id="share-btn" class="bg-blue-500 text-white px-8 py-3 rounded-xl hover:bg-blue-600 transition-colors font-bold">結果をシェア</button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const quizData = [
+                {
+                    question: "AIという言葉の正式名称は何ですか？",
+                    options: [
+                        { text: "人工知能（Artificial Intelligence）", correct: true },
+                        { text: "自動情報（Automated Information）", correct: false },
+                        { text: "高度情報処理（Advanced Information Processing）", correct: false },
+                        { text: "分析インターフェース（Analytical Interface）", correct: false }
+                    ],
+                    explanation: "AIは「Artificial Intelligence（人工知能）」の略称です。人間の知能を模倣するように設計されたコンピュータシステムを指します。"
+                },
+                {
+                    question: "ディープラーニングとは何ですか？",
+                    options: [
+                        { text: "コンピュータが自分で学習するプログラミング手法", correct: false },
+                        { text: "多層のニューラルネットワークを使用した機械学習の一種", correct: true },
+                        { text: "大量のデータを高速で処理する技術", correct: false },
+                        { text: "人間の脳をスキャンする技術", correct: false }
+                    ],
+                    explanation: "ディープラーニングは多層（深層）のニューラルネットワークを使用した機械学習の一種で、特に画像認識や自然言語処理などの分野で革命的な進歩をもたらしました。"
+                },
+                {
+                    question: "「チューリングテスト」とは何を判断するためのテストですか？",
+                    options: [
+                        { text: "コンピュータの処理速度", correct: false },
+                        { text: "AIの創造性", correct: false },
+                        { text: "機械が人間のように思考できるかどうか", correct: true },
+                        { text: "プログラムのバグの有無", correct: false }
+                    ],
+                    explanation: "チューリングテストは、アラン・チューリングが提案した、機械が人間と区別がつかないほど知的な会話ができるかを判断するためのテストです。"
+                },
+                {
+                    question: "次のうち、生成AIの代表的なモデルはどれですか？",
+                    options: [
+                        { text: "Microsoft Excel", correct: false },
+                        { text: "GPT（Generative Pre-trained Transformer）", correct: true },
+                        { text: "HTML5", correct: false },
+                        { text: "Bluetooth", correct: false }
+                    ],
+                    explanation: "GPT（Generative Pre-trained Transformer）は、OpenAIが開発した大規模言語モデルで、テキスト生成や会話などの生成AIの代表的な例です。"
+                },
+                {
+                    question: "機械学習において「過学習（オーバーフィッティング）」とは何ですか？",
+                    options: [
+                        { text: "モデルが訓練データに対して過度に適合し、新しいデータに対する性能が低下する現象", correct: true },
+                        { text: "AIが人間よりも優れた学習能力を持つこと", correct: false },
+                        { text: "コンピュータが処理できる以上のデータを学習しようとすること", correct: false },
+                        { text: "学習時間が長すぎて非効率になること", correct: false }
+                    ],
+                    explanation: "過学習（オーバーフィッティング）は、モデルが訓練データの特徴を過度に学習してしまい、新しいデータに対する汎化能力が低下する問題です。"
+                }
+            ];
+            
+            // ゲーム状態
+            let currentQuestion = 0;
+            let score = 0;
+            let basePoints = 0;
+            let timeBonus = 0;
+            let comboBonus = 0;
+            let combo = 0;
+            let correctAnswers = 0;
+            let answered = false;
+            let timer;
+            let timeLeft = 15;
+            let maxTime = 15;
+            
+            // 画面要素
+            const startScreen = document.getElementById('start-screen');
+            const gameScreen = document.getElementById('game-screen');
+            const resultsScreen = document.getElementById('results-screen');
+            const startBtn = document.getElementById('start-btn');
+            const questionText = document.getElementById('question-text');
+            const optionsContainer = document.getElementById('options-container');
+            const nextBtn = document.getElementById('next-btn');
+            const questionNumber = document.getElementById('question-number');
+            const scoreDisplay = document.getElementById('score-display');
+            const timerBar = document.getElementById('timer-bar');
+            const timeDisplay = document.getElementById('time-display');
+            const feedbackContainer = document.getElementById('feedback-container');
+            const feedbackText = document.getElementById('feedback-text');
+            const finalScore = document.getElementById('final-score');
+            const resultMessage = document.getElementById('result-message');
+            const restartBtn = document.getElementById('restart-btn');
+            const shareBtn = document.getElementById('share-btn');
+            const comboDisplay = document.getElementById('combo-display');
+            const comboCount = document.getElementById('combo-count');
+            const comboMultiplier = document.getElementById('combo-multiplier');
+            const correctAnswersDisplay = document.getElementById('correct-answers');
+            const basePointsDisplay = document.getElementById('base-points');
+            const timeBonusDisplay = document.getElementById('time-bonus');
+            const comboBonusDisplay = document.getElementById('combo-bonus');
+            const rankTitle = document.getElementById('rank-title');
+            
+            // ゲーム開始
+            startBtn.addEventListener('click', () => {
+                startScreen.classList.add('hidden');
+                gameScreen.classList.remove('hidden');
+                loadQuestion();
+                startTimer();
+            });
+            
+            // 問題読み込み
+            function loadQuestion() {
+                answered = false;
+                const question = quizData[currentQuestion];
+                
+                questionText.textContent = question.question;
+                optionsContainer.innerHTML = '';
+                
+                // 選択肢をシャッフル
+                const shuffledOptions = [...question.options].sort(() => Math.random() - 0.5);
+                
+                shuffledOptions.forEach((option, index) => {
+                    const button = document.createElement('button');
+                    button.textContent = option.text;
+                    button.classList.add('option-btn', 'p-4', 'rounded-xl', 'border-2', 'border-gray-300', 'hover:border-indigo-500', 'bg-white', 'hover:bg-indigo-50', 'transition-all', 'text-left');
+                    button.dataset.correct = option.correct;
+                    
+                    button.addEventListener('click', selectAnswer);
+                    optionsContainer.appendChild(button);
+                });
+                
+                questionNumber.textContent = `問題 ${currentQuestion + 1}/${quizData.length}`;
+                
+                nextBtn.classList.add('hidden');
+                feedbackContainer.classList.add('hidden');
+                
+                // コンボ表示
+                if (combo >= 2) {
+                    comboDisplay.classList.remove('hidden');
+                    comboCount.textContent = combo;
+                    comboMultiplier.textContent = getComboMultiplier().toFixed(1);
+                } else {
+                    comboDisplay.classList.add('hidden');
+                }
+                
+                // タイマーリセット
+                timeLeft = maxTime;
+                timeDisplay.textContent = `${timeLeft}秒`;
+                timerBar.style.width = '100%';
+            }
+            
+            // タイマー開始
+            function startTimer() {
+                clearInterval(timer);
+                timer = setInterval(() => {
+                    timeLeft -= 0.1;
+                    const percentage = (timeLeft / maxTime) * 100;
+                    timerBar.style.width = `${percentage}%`;
+                    timeDisplay.textContent = `${Math.ceil(timeLeft)}秒`;
+                    
+                    if (timeLeft <= 0) {
+                        clearInterval(timer);
+                        if (!answered) {
+                            timeOut();
+                        }
+                    }
+                }, 100);
+            }
+            
+            // 時間切れ
+            function timeOut() {
+                answered = true;
+                combo = 0;
+                
+                // 正解を表示
+                optionsContainer.querySelectorAll('.option-btn').forEach(button => {
+                    button.disabled = true;
+                    if (button.dataset.correct === "true") {
+                        button.classList.add('correct');
+                    }
+                });
+                
+                feedbackText.textContent = `時間切れ！${quizData[currentQuestion].explanation}`;
+                feedbackContainer.classList.remove('hidden');
+                
+                nextBtn.classList.remove('hidden');
+            }
+            
+            // 回答選択
+            function selectAnswer(e) {
+                if (answered) return;
+                
+                clearInterval(timer);
+                answered = true;
+                const selectedBtn = e.target;
+                const isCorrect = selectedBtn.dataset.correct === "true";
+                
+                if (isCorrect) {
+                    selectedBtn.classList.add('correct');
+                    
+                    // 基本ポイント
+                    const basePoint = 100;
+                    basePoints += basePoint;
+                    
+                    // タイムボーナス
+                    const timeBonusPoints = Math.round((timeLeft / maxTime) * 50);
+                    timeBonus += timeBonusPoints;
+                    
+                    // コンボボーナス
+                    combo++;
+                    let comboPoints = 0;
+                    if (combo >= 2) {
+                        const multiplier = getComboMultiplier();
+                        comboPoints = Math.round(basePoint * (multiplier - 1));
+                        comboBonus += comboPoints;
+                    }
+                    
+                    // 合計ポイント
+                    const totalPoints = basePoint + timeBonusPoints + comboPoints;
+                    score += totalPoints;
+                    correctAnswers++;
+                    
+                    // ポイント表示アニメーション
+                    showPointsPopup(selectedBtn, totalPoints);
+                    
+                    // エフェクト
+                    createConfetti(15);
+                    
+                } else {
+                    selectedBtn.classList.add('incorrect');
+                    combo = 0;
+                    
+                    // 正解を表示
+                    optionsContainer.querySelectorAll('.option-btn').forEach(button => {
+                        if (button.dataset.correct === "true") {
+                            button.classList.add('correct');
+                        }
+                    });
+                }
+                
+                scoreDisplay.textContent = score;
+                
+                // フィードバック表示
+                feedbackText.textContent = quizData[currentQuestion].explanation;
+                feedbackContainer.classList.remove('hidden');
+                
+                // 全てのボタンを無効化
+                optionsContainer.querySelectorAll('.option-btn').forEach(button => {
+                    button.disabled = true;
+                });
+                
+                nextBtn.classList.remove('hidden');
+            }
+            
+            // コンボ倍率計算
+            function getComboMultiplier() {
+                if (combo <= 1) return 1;
+                return Math.min(1 + (combo - 1) * 0.2, 2.0); // 最大2倍まで
+            }
+            
+            // ポイント表示アニメーション
+            function showPointsPopup(element, points) {
+                const popup = document.createElement('div');
+                popup.classList.add('points-popup');
+                popup.textContent = `+${points}`;
+                
+                const rect = element.getBoundingClientRect();
+                popup.style.left = `${rect.left + rect.width / 2}px`;
+                popup.style.top = `${rect.top}px`;
+                
+                document.getElementById('points-container').appendChild(popup);
+                
+                setTimeout(() => {
+                    popup.remove();
+                }, 1500);
+            }
+            
+            // 次の問題へ
+            nextBtn.addEventListener('click', () => {
+                currentQuestion++;
+                
+                if (currentQuestion < quizData.length) {
+                    loadQuestion();
+                    startTimer();
+                } else {
+                    showResults();
+                }
+            });
+            
+            // 結果表示
+            function showResults() {
+                gameScreen.classList.add('hidden');
+                resultsScreen.classList.remove('hidden');
+                
+                finalScore.textContent = score;
+                correctAnswersDisplay.textContent = `${correctAnswers}/${quizData.length}`;
+                basePointsDisplay.textContent = basePoints;
+                timeBonusDisplay.textContent = timeBonus;
+                comboBonusDisplay.textContent = comboBonus;
+                
+                // ランク判定
+                let rank, message;
+                if (score >= 700) {
+                    rank = "AIマスター";
+                    message = "素晴らしい！あなたはAIの知識に精通しています！";
+                    createStars(5);
+                    createConfetti(50);
+                } else if (score >= 500) {
+                    rank = "AI研究者";
+                    message = "すごい！AIについてかなり詳しいですね！";
+                    createStars(4);
+                    createConfetti(30);
+                } else if (score >= 300) {
+                    rank = "AI技術者";
+                    message = "よくできました！AIの基本をしっかり理解しています。";
+                    createStars(3);
+                } else if (score >= 150) {
+                    rank = "AI学習者";
+                    message = "頑張りました！AIの知識を着実に身につけています。";
+                    createStars(2);
+                } else {
+                    rank = "AI初心者";
+                    message = "AIの世界はまだまだ奥深いです。もう一度挑戦してみましょう！";
+                    createStars(1);
+                }
+                
+                rankTitle.textContent = `ランク: ${rank}`;
+                resultMessage.textContent = message;
+            }
+            
+            // 星を表示
+            function createStars(count) {
+                const starsContainer = document.getElementById('stars-container');
+                starsContainer.innerHTML = '';
+                
+                for (let i = 0; i < count; i++) {
+                    const star = document.createElement('div');
+                    star.classList.add('star');
+                    star.textContent = '⭐';
+                    
+                    const angle = (i / count) * Math.PI * 2;
+                    const radius = 70;
+                    const x = Math.cos(angle) * radius;
+                    const y = Math.sin(angle) * radius;
+                    
+                    star.style.left = `calc(50% + ${x}px)`;
+                    star.style.top = `calc(50% + ${y}px)`;
+                    star.style.animationDelay = `${i * 0.2}s`;
+                    
+                    starsContainer.appendChild(star);
+                }
+            }
+            
+            // 紙吹雪エフェクト
+            function createConfetti(amount = 15) {
+                const confettiContainer = document.getElementById('confetti-container');
+                const colors = ['#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899'];
+                
+                for (let i = 0; i < amount; i++) {
+                    const confetti = document.createElement('div');
+                    confetti.classList.add('confetti');
+                    confetti.style.left = `${Math.random() * 100}%`;
+                    confetti.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                    confetti.style.width = `${Math.random() * 10 + 5}px`;
+                    confetti.style.height = confetti.style.width;
+                    confetti.style.animationDuration = `${Math.random() * 3 + 2}s`;
+                    confetti.style.animationDelay = `${Math.random() * 2}s`;
+                    
+                    confettiContainer.appendChild(confetti);
+                    
+                    setTimeout(() => {
+                        confetti.remove();
+                    }, 5000);
+                }
+            }
+            
+            // リスタート
+            restartBtn.addEventListener('click', () => {
+                currentQuestion = 0;
+                score = 0;
+                basePoints = 0;
+                timeBonus = 0;
+                comboBonus = 0;
+                combo = 0;
+                correctAnswers = 0;
+                
+                scoreDisplay.textContent = score;
+                resultsScreen.classList.add('hidden');
+                gameScreen.classList.remove('hidden');
+                
+                loadQuestion();
+                startTimer();
+            });
+            
+            // 結果シェア
+            shareBtn.addEventListener('click', () => {
+                const text = `AI知識バトルで${score}点獲得！ランク：${rankTitle.textContent.replace('ランク: ', '')}`;
+                
+                if (navigator.share) {
+                    navigator.share({
+                        title: 'AI知識バトル',
+                        text: text
+                    }).catch(console.error);
+                } else {
+                    alert(`${text}\n\nスコアをシェアしよう！`);
+                }
+            });
+        });
+    </script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'964afd800215d4cc',t:'MTc1MzQzOTUxMy4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
